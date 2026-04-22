@@ -16,9 +16,12 @@ function Student() {
   const [violationDetails, setViolationDetails] = useState({ type: "", time: "" });
   const [strikes, setStrikes] = useState(0);
   const videoRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyzerRef = useRef(null);
   
   const showModalRef = useRef(false);
   const strikesRef = useRef(0);
+  const eventsRef = useRef([]);
 
   const navigate = useNavigate();
 
@@ -38,16 +41,54 @@ function Student() {
   useEffect(() => {
     if (!sessionActive) return;
 
-    let eventsRef = [];
-
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
+
+        // Setup Audio Monitoring
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyzer = audioContext.createAnalyser();
+        analyzer.fftSize = 256;
+        source.connect(analyzer);
+        
+        audioContextRef.current = audioContext;
+        analyzerRef.current = analyzer;
+
+        const dataArray = new Uint8Array(analyzer.frequencyBinCount);
+        let lastUiUpdate = 0;
+
+        const checkAudio = () => {
+          if (!analyzerRef.current) return;
+          analyzerRef.current.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+          
+          const now = Date.now();
+          if (now - lastUiUpdate > 100) {
+            setMetrics(m => ({ ...m, audio: Math.round(average * 1.5) }));
+            lastUiUpdate = now;
+          }
+
+          if (average > 35) { // Even more sensitive
+            if (!showModalRef.current && strikesRef.current < 5) {
+              strikesRef.current += 1;
+              setStrikes(strikesRef.current);
+              setViolationDetails({ type: "AUDIO / SPEAKING", time: new Date().toLocaleTimeString() });
+              showModalRef.current = true;
+              setShowViolationModal(true);
+              addLog("CRITICAL: Voice Detected");
+            }
+          }
+          requestAnimationFrame(checkAudio);
+        };
+        checkAudio();
+
         addLog("Camera & Mic accessed");
-      } catch {
+      } catch (err) {
+        console.error(err);
         addLog("Error: Camera access denied");
       }
     };
@@ -57,13 +98,13 @@ function Student() {
       if (!video || video.videoWidth === 0) return null;
 
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = 320; // Reduce resolution for speed
+      canvas.height = (320 / video.videoWidth) * video.videoHeight;
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       return new Promise((resolve) => {
-        canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.9);
+        canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.6); // Lower quality for speed
       });
     };
 
@@ -71,7 +112,7 @@ function Student() {
       if (document.hidden && !showModalRef.current && strikesRef.current < 5) {
         strikesRef.current += 1;
         setStrikes(strikesRef.current);
-        eventsRef.push({ event: "TAB_SWITCHED", timestamp: Date.now() });
+        eventsRef.current.push({ event: "TAB_SWITCHED", timestamp: Date.now() });
         addLog("WARNING: Tab Switched");
         setMetrics(m => ({ ...m, risk: "HIGH" }));
         setViolationDetails({ type: "Tab Switch / App Focus Lost", time: new Date().toLocaleTimeString() });
@@ -84,7 +125,7 @@ function Student() {
       if (!showModalRef.current && strikesRef.current < 5) {
         strikesRef.current += 1;
         setStrikes(strikesRef.current);
-        eventsRef.push({ event: "WINDOW_BLUR", timestamp: Date.now() });
+        eventsRef.current.push({ event: "WINDOW_BLUR", timestamp: Date.now() });
         addLog("WARNING: Window Focus Lost");
         setMetrics(m => ({ ...m, risk: "MEDIUM" }));
         setViolationDetails({ type: "Window Focus Lost", time: new Date().toLocaleTimeString() });
@@ -115,8 +156,6 @@ function Student() {
           const aiData = await aiRes.json();
           const detectedEvents = aiData.events || [];
           
-          let newGaze = 98;
-          let newAudio = 12;
           let hasViolation = false;
           let violationType = "";
 
@@ -124,22 +163,16 @@ function Student() {
           for (const ev of detectedEvents) {
             const eName = ev.event;
             if (eName === "LOOKING_AWAY" || eName === "HEAD_TURNED" || eName === "NO_FACE" || eName === "MULTIPLE_FACES") {
-              newGaze = Math.max(10, Math.floor(Math.random() * 20) + 30); // drop to 30-50%
               hasViolation = true;
               violationType = eName.replace("_", " ");
             }
-            if (eName === "SPEAKING") {
-              newAudio = Math.max(60, Math.floor(Math.random() * 30) + 70); // spike to 70-100db
-              hasViolation = true;
-              violationType = eName;
-            }
           }
 
-          setMetrics(prev => ({
-             gaze: newGaze,
-             audio: newAudio,
-             risk: hasViolation ? "HIGH" : prev.risk
-          }));
+          if (hasViolation) {
+            setMetrics(m => ({ ...m, risk: "HIGH", gaze: 30 }));
+          } else {
+             setMetrics(m => ({ ...m, gaze: 98 }));
+          }
 
           if (hasViolation && !showModalRef.current && strikesRef.current < 5) {
             strikesRef.current += 1;
@@ -147,29 +180,30 @@ function Student() {
             setViolationDetails({ type: violationType, time: new Date().toLocaleTimeString() });
             showModalRef.current = true;
             setShowViolationModal(true);
+            addLog(`WARNING: ${violationType}`);
           }
 
           const combinedEvents = [
-            ...eventsRef,
+            ...eventsRef.current,
             ...detectedEvents
           ];
 
           if (combinedEvents.length > 0) {
-            await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/log-events`, {
+            fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/log-events`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 student_id: studentId,
                 events: combinedEvents
               })
-            });
-            eventsRef = []; // clear after sending
+            }).catch(() => {});
+            eventsRef.current = []; 
           }
         }
-      } catch {
-        // silently fail or log internally
+      } catch (err) {
+        console.error("AI Detect Error:", err);
       }
-    }, 3000);
+    }, 800);
 
     startCamera();
 
@@ -179,6 +213,7 @@ function Student() {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("blur", handleBlur);
+      if (audioContextRef.current) audioContextRef.current.close();
       if (currentVideoRef && currentVideoRef.srcObject) {
         currentVideoRef.srcObject.getTracks().forEach(t => t.stop());
       }
