@@ -58,13 +58,14 @@ def calculate_risk(events):
         return "HIGH"
 
 # ================== MEDIAPIPE ==================
-mp_face_detection = mp.solutions.face_detection
+from mediapipe.python.solutions import face_detection as mp_face_detection
+from mediapipe.python.solutions import face_mesh as mp_face_mesh
+
 face_detector = mp_face_detection.FaceDetection(
     model_selection=1,
     min_detection_confidence=0.3
 )
 
-mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=True,
     max_num_faces=2,
