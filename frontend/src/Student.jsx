@@ -22,6 +22,7 @@ function Student() {
   const showModalRef = useRef(false);
   const strikesRef = useRef(0);
   const eventsRef = useRef([]);
+  const isLookingAwayRef = useRef(false);
 
   const navigate = useNavigate();
 
@@ -68,18 +69,22 @@ function Student() {
           
           const now = Date.now();
           if (now - lastUiUpdate > 100) {
-            setMetrics(m => ({ ...m, audio: Math.round(average * 1.5) }));
+            setMetrics(m => ({ ...m, audio: Math.min(100, Math.round(average * 2.2)) })); 
             lastUiUpdate = now;
           }
 
-          if (average > 35) { // Even more sensitive
+          const isVoice = average > 25; 
+          const isTalkingWhileLookingAway = isVoice && isLookingAwayRef.current;
+
+          if (isTalkingWhileLookingAway || average > 45) { 
             if (!showModalRef.current && strikesRef.current < 5) {
               strikesRef.current += 1;
               setStrikes(strikesRef.current);
-              setViolationDetails({ type: "AUDIO / SPEAKING", time: new Date().toLocaleTimeString() });
+              const vType = isTalkingWhileLookingAway ? "SUSPICIOUS TALKING (LOOKING AWAY)" : "AUDIO VIOLATION";
+              setViolationDetails({ type: vType, time: new Date().toLocaleTimeString() });
               showModalRef.current = true;
               setShowViolationModal(true);
-              addLog("CRITICAL: Voice Detected");
+              addLog(`CRITICAL: ${vType}`);
             }
           }
           requestAnimationFrame(checkAudio);
@@ -160,13 +165,16 @@ function Student() {
           let violationType = "";
 
           // Process AI events
+          let lookingAwayNow = false;
           for (const ev of detectedEvents) {
             const eName = ev.event;
             if (eName === "LOOKING_AWAY" || eName === "HEAD_TURNED" || eName === "NO_FACE" || eName === "MULTIPLE_FACES") {
               hasViolation = true;
               violationType = eName.replace("_", " ");
+              if (eName === "LOOKING_AWAY" || eName === "HEAD_TURNED") lookingAwayNow = true;
             }
           }
+          isLookingAwayRef.current = lookingAwayNow;
 
           if (hasViolation) {
             setMetrics(m => ({ ...m, risk: "HIGH", gaze: 30 }));

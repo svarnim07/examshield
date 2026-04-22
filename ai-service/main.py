@@ -83,16 +83,16 @@ except:
 
 face_detector = mp_face_detection.FaceDetection(
     model_selection=0,
-    min_detection_confidence=0.5
+    min_detection_confidence=0.4
 )
 print("CHECKPOINT: Face detector initialized")
 
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=False,
-    max_num_faces=1,
+    max_num_faces=4,
     refine_landmarks=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5
+    min_detection_confidence=0.4,
+    min_tracking_confidence=0.4
 )
 print("CHECKPOINT: Face mesh initialized")
 
@@ -154,7 +154,7 @@ async def detect_face(file: UploadFile = File(...)):
                 left_dist = abs(nose.x - left_face.x)
                 right_dist = abs(nose.x - right_face.x)
 
-                if abs(left_dist - right_dist) > 0.08:
+                if abs(left_dist - right_dist) > 0.05:
                     head_turned = True
 
         events = []
