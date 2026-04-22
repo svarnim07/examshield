@@ -6,8 +6,12 @@ import mediapipe as mp
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+import os
+
 # ================== DATABASE SETUP ==================
-engine = create_engine("sqlite:///events.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+db_path = os.path.join(BASE_DIR, "events.db")
+engine = create_engine(f"sqlite:///{db_path}")
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -153,12 +157,24 @@ async def log_events(request: Request):
 @app.get("/get-logs")
 def get_logs():
     db = SessionLocal()
+    # Get all logs to aggregate latest status and recent events
     logs = db.query(EventLog).order_by(EventLog.id.desc()).all()
     db.close()
 
-    latest = {}
+    students_data = {}
     for log in logs:
-        if log.student_id not in latest:
-            latest[log.student_id] = log.risk
+        sid = log.student_id
+        if sid not in students_data:
+            students_data[sid] = {
+                "student_id": sid,
+                "risk": log.risk,
+                "events": []
+            }
+        # Add event to history if it's not NORMAL and we don't have too many already
+        if log.event != "NORMAL" and len(students_data[sid]["events"]) < 5:
+            students_data[sid]["events"].append({
+                "event": log.event,
+                "id": log.id
+            })
 
-    return [{"student_id": k, "risk": v} for k, v in latest.items()]
+    return list(students_data.values())

@@ -8,7 +8,9 @@ function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/get-logs");
+        const apiUrl = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+        const res = await fetch(`${apiUrl}/get-logs`);
+        if (!res.ok) throw new Error("Network response was not ok");
         const data = await res.json();
         setStudents(data);
         
@@ -156,15 +158,21 @@ function Dashboard() {
           </h2>
           
           <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-             {students.filter(s => s.risk !== "LOW").map((s, i) => (
-                <div key={`alert-${i}`} className="p-3 rounded-lg bg-black/30 border-l-2 border-brand-warning">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-mono text-brand-muted">[{new Date().toLocaleTimeString()}]</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-warning/10 text-brand-warning uppercase">AI FLAG</span>
+             {students.map((s) => (
+                s.events.map((ev, idx) => (
+                  <div key={`${s.student_id}-${ev.id}`} className={`p-3 rounded-lg bg-black/30 border-l-2 ${s.risk === 'HIGH' ? 'border-brand-danger' : 'border-brand-warning'}`}>
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-mono text-brand-muted">[{new Date().toLocaleTimeString()}]</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.risk === 'HIGH' ? 'bg-brand-danger/10 text-brand-danger' : 'bg-brand-warning/10 text-brand-warning'} uppercase`}>
+                        {ev.event}
+                      </span>
+                    </div>
+                    <p className="text-sm text-white">
+                      Candidate <span className="font-medium text-brand-primary">{s.student_id}</span> flagged for <span className="text-brand-warning">{ev.event.replace('_', ' ')}</span>.
+                    </p>
                   </div>
-                  <p className="text-sm text-white"><span className="font-medium text-brand-primary">{s.student_id}</span> triggered multiple suspicion metrics.</p>
-                </div>
-             ))}
+                ))
+             )).flat().slice(0, 10)}
              {students.length === 0 && (
                <div className="text-center py-8 text-sm text-brand-muted">
                  Awaiting telemetry data...
