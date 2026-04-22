@@ -69,14 +69,14 @@ function Student() {
           
           const now = Date.now();
           if (now - lastUiUpdate > 100) {
-            setMetrics(m => ({ ...m, audio: Math.min(100, Math.round(average * 2.2)) })); 
+            setMetrics(m => ({ ...m, audio: Math.min(100, Math.round(average * 1.8)) })); 
             lastUiUpdate = now;
           }
 
-          const isVoice = average > 25; 
+          const isVoice = average > 40; // Increased threshold for "speaking"
           const isTalkingWhileLookingAway = isVoice && isLookingAwayRef.current;
 
-          if (isTalkingWhileLookingAway || average > 45) { 
+          if (isTalkingWhileLookingAway || average > 60) { // Much more lenient
             if (!showModalRef.current && strikesRef.current < 5) {
               strikesRef.current += 1;
               setStrikes(strikesRef.current);
