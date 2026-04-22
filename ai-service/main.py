@@ -57,20 +57,33 @@ def calculate_risk(events):
     else:
         return "HIGH"
 
+print("CHECKPOINT: Starting Imports...")
+import mediapipe as mp
+print("CHECKPOINT: MediaPipe imported")
+
 # ================== MEDIAPIPE ==================
-from mediapipe.python.solutions import face_detection as mp_face_detection
-from mediapipe.python.solutions import face_mesh as mp_face_mesh
+try:
+    from mediapipe.python.solutions import face_detection as mp_face_detection
+    from mediapipe.python.solutions import face_mesh as mp_face_mesh
+    print("CHECKPOINT: Solutions imported")
+except ImportError as e:
+    print(f"IMPORT ERROR: {e}")
+    # Fallback
+    mp_face_detection = mp.solutions.face_detection
+    mp_face_mesh = mp.solutions.face_mesh
 
 face_detector = mp_face_detection.FaceDetection(
     model_selection=1,
     min_detection_confidence=0.3
 )
+print("CHECKPOINT: Face detector initialized")
 
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=True,
     max_num_faces=2,
     refine_landmarks=True
 )
+print("CHECKPOINT: Face mesh initialized")
 
 @app.get("/")
 def home():
