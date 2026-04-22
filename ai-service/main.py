@@ -59,12 +59,27 @@ def calculate_risk(events):
 
 print("CHECKPOINT: Starting Imports...")
 import mediapipe as mp
-print(f"CHECKPOINT: MediaPipe version {mp.__version__} imported")
+print(f"CHECKPOINT: MediaPipe base imported from {mp.__path__}")
 
-# ================== MEDIAPIPE ==================
-from mediapipe.solutions import face_detection as mp_face_detection
-from mediapipe.solutions import face_mesh as mp_face_mesh
-print("CHECKPOINT: Solutions imported")
+# ================== MEDIAPIPE SOLUTIONS ==================
+# Try multiple ways to find solutions
+mp_face_detection = None
+mp_face_mesh = None
+
+try:
+    import mediapipe.solutions.face_detection as fd
+    import mediapipe.solutions.face_mesh as fm
+    mp_face_detection = fd
+    mp_face_mesh = fm
+    print("CHECKPOINT: Solutions imported via direct submodule")
+except:
+    try:
+        mp_face_detection = mp.solutions.face_detection
+        mp_face_mesh = mp.solutions.face_mesh
+        print("CHECKPOINT: Solutions imported via mp.solutions attribute")
+    except:
+        print("CRITICAL: Failed to load MediaPipe solutions through standard paths")
+        raise
 
 face_detector = mp_face_detection.FaceDetection(
     model_selection=1,
